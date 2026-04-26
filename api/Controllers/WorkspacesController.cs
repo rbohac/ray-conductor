@@ -10,6 +10,7 @@ namespace Maestro.Api.Controllers;
 public sealed class WorkspacesController(
     WorkspaceStore store,
     WorktreeService worktrees,
+    AgentProcessService agents,
     ILogger<WorkspacesController> logger) : ControllerBase
 {
     [HttpGet]
@@ -84,8 +85,13 @@ public sealed class WorkspacesController(
             return NoContent();
         }
 
-        // Phase 3 will hook agent process termination here. For Phase 2, no
-        // running processes exist, so we can go straight to worktree removal.
+        // Kill any agent processes still attached to this workspace before
+        // we yank the worktree out from under them.
+        foreach (var ag in ws.Agents.Where(a => a.Status is Maestro.Api.Models.Domain.AgentStatus.Running or Maestro.Api.Models.Domain.AgentStatus.Starting).ToArray())
+        {
+            agents.Stop(ag.Id);
+        }
+
         try
         {
             await worktrees.RemoveAsync(repo, ws, deleteBranch, ct);
