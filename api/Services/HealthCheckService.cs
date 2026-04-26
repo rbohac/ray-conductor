@@ -69,6 +69,8 @@ public sealed class HealthCheckService(
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8,
             };
             psi.ArgumentList.Add("--version");
 

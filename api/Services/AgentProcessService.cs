@@ -53,6 +53,11 @@ public sealed class AgentProcessService(
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
+            // Force UTF-8 so em-dashes and other non-ASCII chars from the
+            // child process don't render as mojibake on Windows consoles
+            // whose default codepage is CP850/CP437.
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
 

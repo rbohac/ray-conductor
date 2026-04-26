@@ -26,6 +26,8 @@ public sealed class GitService(ILogger<GitService> logger)
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
 
         if (!string.IsNullOrWhiteSpace(workingDirectory))
