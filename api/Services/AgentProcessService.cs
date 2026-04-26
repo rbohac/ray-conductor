@@ -124,6 +124,16 @@ public sealed class AgentProcessService(
             throw new InvalidOperationException($"Failed to launch {file}: {ex.Message}", ex);
         }
 
+        if (req.Provider == AgentProvider.Codex)
+        {
+            // `codex exec` treats a piped stdin as additional input and waits
+            // for EOF before processing the prompt arg. We send the prompt as
+            // an arg only, so close stdin immediately. Side-effect: codex
+            // agents are single-shot (TrySendInput will fail), which is fine
+            // because `codex exec` exits after one turn anyway.
+            try { proc.StandardInput.Close(); } catch { /* ignore */ }
+        }
+
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
 
@@ -227,6 +237,11 @@ public sealed class AgentProcessService(
                 args.Add(req.InitialPrompt);
                 break;
             case AgentProvider.Codex:
+                // Bare `codex` launches an interactive TUI that needs a TTY;
+                // piping stdio there fails with `Error: stdin is not a
+                // terminal`. `codex exec` is the non-interactive entrypoint,
+                // which streams events over plain pipes.
+                args.Add("exec");
                 args.Add("--yolo");
                 if (!string.IsNullOrWhiteSpace(req.Model))
                 {
