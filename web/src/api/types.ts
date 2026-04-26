@@ -87,7 +87,11 @@ export interface DiffResult {
 
 export interface SystemHealth {
   git: boolean;
+  gitVersion?: string | null;
   claude: boolean;
+  claudeVersion?: string | null;
   codex: boolean;
+  codexVersion?: string | null;
   errors: string[];
+  checkedAt: string;
 }

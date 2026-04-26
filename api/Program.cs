@@ -28,6 +28,9 @@ builder.Services.AddSingleton<WorktreeWatcherService>();
 builder.Services.AddSingleton<AgentProcessService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AgentProcessService>());
 
+builder.Services.AddSingleton<Maestro.Api.Models.Domain.SystemHealth>();
+builder.Services.AddHostedService<HealthCheckService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

@@ -5,6 +5,7 @@ import { WorkspacesPage } from './pages/WorkspacesPage';
 import { ReposPage } from './pages/ReposPage';
 import { WorkspaceDetailPage } from './pages/WorkspaceDetailPage';
 import { NewWorkspaceModal } from './components/NewWorkspaceModal';
+import { HealthBanner } from './components/HealthBanner';
 import { WorkspacesProvider } from './context/WorkspacesContext';
 
 function Shell() {
@@ -30,6 +31,7 @@ function Shell() {
   return (
     <div className="flex h-full flex-col">
       <Header onNewWorkspace={openNew} />
+      <HealthBanner />
       <main className="flex-1 overflow-auto">
         <Routes>
           <Route path="/" element={<WorkspacesPage onNewWorkspace={openNew} />} />

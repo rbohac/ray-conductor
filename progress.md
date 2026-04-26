@@ -132,3 +132,31 @@ base branch (verified via `git log --oneline main`); subsequent merge
 returns 409; conflicting changes on both sides produce a 409 with the
 conflicting filenames listed and the source repo cleanly back on the
 base branch (`git status` clean).
+
+## Phase 6 — Startup health checks + final polish (DONE)
+
+`SystemHealth` is a DI singleton populated once at startup by
+`HealthCheckService` (registered as `IHostedService`). The check runs
+`git --version`, `<claudeCommand> --version`, `<codexCommand> --version`
+(both honoring the `Maestro:ClaudeCommand` / `Maestro:CodexCommand`
+overrides) and stores the boolean result, the trimmed version string,
+and any error message. `GET /api/health` returns the cached snapshot
+without re-running the probes. Frontend gained a `HealthBanner` component
+mounted under the global header; it fetches `/api/health` once on app
+load, lists missing CLIs with concise install hints
+(`npm install -g @anthropic-ai/claude-code`, `npm install -g @openai/codex`,
+`git-scm.com/download/win`) and a docs link, and is dismissable. The
+banner is amber, non-blocking — repo and workspace management still work
+without any CLIs. The README at the repo root was expanded with full
+setup steps, daily-use walk-through, dev/publish instructions, agent CLI
+override env vars, known-limitation list, and a troubleshooting section.
+Polish: dark slate palette throughout, monospace for agent output and
+file paths, dense Conductor-style layout, no gradients, no rounded-3xl
+bubbliness, status badges with Lucide icons. Verified: full happy path
+(register repo → create workspace → spawn agent → SSE streams 8 output
+events + 2 status events + 1 worktree-changed event → agent completes →
+diff endpoint reflects worktree changes → manual commit + merge folds
+into base branch → workspace status flips to `completed` → delete
+returns 204 and removes the worktree + branch). On this dev box `codex`
+is intentionally absent and the `/api/health` response correctly reports
+`codex: false` with an actionable error string.

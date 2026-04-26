@@ -1,11 +1,12 @@
+using Maestro.Api.Models.Domain;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Maestro.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public sealed class HealthController : ControllerBase
+public sealed class HealthController(SystemHealth health) : ControllerBase
 {
     [HttpGet]
-    public IActionResult Get() => Ok(new { status = "ok", name = "Maestro" });
+    public ActionResult<SystemHealth> Get() => health;
 }
