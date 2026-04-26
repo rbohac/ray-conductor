@@ -199,12 +199,15 @@ public sealed class AgentProcessService(
         // Both CLIs run with their auto-approve flags so we never need to
         // forward an interactive prompt through SSE. The worktree is the
         // isolation boundary for v1 — see PHASE 3 docs in progress.md.
-        var file = req.Provider switch
+        var rawFile = req.Provider switch
         {
             AgentProvider.Claude => config["Maestro:ClaudeCommand"] ?? "claude",
             AgentProvider.Codex => config["Maestro:CodexCommand"] ?? "codex",
             _ => throw new ArgumentException($"Unknown provider {req.Provider}", nameof(req)),
         };
+        // On Windows, npm-installed CLIs land as `claude.cmd` / `codex.cmd`;
+        // CreateProcess only auto-appends `.exe`, so resolve via PATHEXT.
+        var file = CommandResolver.Resolve(rawFile);
 
         var args = new List<string>();
         switch (req.Provider)
