@@ -64,7 +64,7 @@ public sealed class HealthCheckService(
         {
             var psi = new ProcessStartInfo
             {
-                FileName = command,
+                FileName = CommandResolver.Resolve(command),
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
