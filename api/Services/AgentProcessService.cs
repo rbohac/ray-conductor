@@ -14,6 +14,7 @@ namespace Maestro.Api.Services;
 public sealed class AgentProcessService(
     WorkspaceStore store,
     EventBus bus,
+    WorktreeWatcherService watcher,
     ILogger<AgentProcessService> logger,
     IConfiguration config) : IHostedService
 {
@@ -96,6 +97,13 @@ public sealed class AgentProcessService(
                         : WorkspaceStatus.Idle;
                 }
             });
+            // No more running agents in this workspace — stop watching so we
+            // don't burn FS handles on idle worktrees.
+            var ws = store.GetWorkspace(workspace.Id);
+            if (ws is not null && !ws.Agents.Any(a => a.Status is AgentStatus.Running or AgentStatus.Starting))
+            {
+                watcher.StopWatching(workspace.Id);
+            }
             bus.Publish(workspace.Id, new AgentEvent("agent-status",
                 new { agentId, status = finalStatus.ToString().ToLowerInvariant(), exitCode = proc.ExitCode, ts = DateTimeOffset.UtcNow }));
             try { proc.Dispose(); } catch { /* ignore */ }
@@ -132,6 +140,8 @@ public sealed class AgentProcessService(
             ws.Agents.Add(agent);
             ws.Status = WorkspaceStatus.Running;
         });
+
+        watcher.StartWatching(workspace.Id, workspace.WorktreePath);
 
         bus.Publish(workspace.Id, new AgentEvent("agent-status",
             new { agentId, status = "running", exitCode = (int?)null, ts = DateTimeOffset.UtcNow }));

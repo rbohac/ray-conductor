@@ -23,6 +23,8 @@ builder.Services.AddSingleton<WorkspaceStore>();
 builder.Services.AddSingleton<GitService>();
 builder.Services.AddSingleton<WorktreeService>();
 builder.Services.AddSingleton<EventBus>();
+builder.Services.AddSingleton<DiffService>();
+builder.Services.AddSingleton<WorktreeWatcherService>();
 builder.Services.AddSingleton<AgentProcessService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AgentProcessService>());
 

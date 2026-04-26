@@ -11,6 +11,7 @@ public sealed class WorkspacesController(
     WorkspaceStore store,
     WorktreeService worktrees,
     AgentProcessService agents,
+    DiffService diffs,
     ILogger<WorkspacesController> logger) : ControllerBase
 {
     [HttpGet]
@@ -22,6 +23,17 @@ public sealed class WorkspacesController(
     {
         var ws = store.GetWorkspace(id);
         return ws is null ? NotFound() : Ok(WorkspaceDto.From(ws));
+    }
+
+    [HttpGet("{id}/diff")]
+    public async Task<ActionResult<DiffResult>> GetDiff(string id, CancellationToken ct)
+    {
+        var ws = store.GetWorkspace(id);
+        if (ws is null) return NotFound();
+        var repo = store.GetRepo(ws.RepoId);
+        if (repo is null) return NotFound(new { error = "Workspace repo missing." });
+        var result = await diffs.GetAsync(repo.Path, ws.BaseBranch, ws.BranchName, ct);
+        return Ok(result);
     }
 
     [HttpPost]

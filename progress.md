@@ -83,3 +83,30 @@ and process is gone from `ps`; `POST /api/agents/stop-all` kills every
 running agent across all workspaces; clean API shutdown via SIGTERM kills
 children with no zombies; SIGKILL of the API followed by restart marks the
 prior agent `orphaned` and the workspace `idle` (not stuck "running").
+
+## Phase 4 — Push-driven diff view via FileSystemWatcher (DONE)
+
+`WorktreeWatcherService` is a singleton that owns one `FileSystemWatcher`
+per workspace while at least one agent is running. Events are debounced via
+a per-workspace `Timer` (500 ms quiet window) and the resulting
+`worktree-changed` payload is published on the `EventBus`. Changes inside
+`.git/` (worktree gitfile) and `.maestro-worktrees/` are filtered out so
+the watcher never feeds itself. `AgentProcessService` calls
+`StartWatching` when an agent enters `running` and `StopWatching` when no
+agents remain in `running`/`starting` state, so we don't burn FS handles
+on idle worktrees. `DiffService` runs `git diff base...head` via the
+existing `GitService` and parses the unified diff into typed
+`DiffFile`/`DiffHunk` records (status `Added`/`Modified`/`Deleted`/
+`Renamed`, additions + deletions counts, hunk header + body). Endpoint
+`GET /api/workspaces/{id}/diff` returns the structured result. Frontend
+gained a `DiffView` component using `react-diff-viewer-continued`
+(unified mode, dark theme), per-file expandable blocks with status icons
+and `+adds / -dels` counts, a top-line summary, manual refresh button,
+and an "updated" pulse badge on the Diff tab when a `worktree-changed`
+event arrives while the user is on the Output tab.
+`WorkspaceDetailPage` now exposes Output/Diff tabs and bumps a
+`changeToken` whenever SSE delivers `worktree-changed`, which triggers a
+`useEffect`-driven refetch in `DiffView`. Verified: file modifications
+inside a watched worktree produce `worktree-changed` SSE events within
+~500 ms; the diff endpoint correctly classifies added/modified/deleted
+files; changes inside `.git/` are filtered.

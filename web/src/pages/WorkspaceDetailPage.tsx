@@ -7,6 +7,7 @@ import { useSse } from '../hooks/useSse';
 import { AgentOutputPanel } from '../components/AgentOutputPanel';
 import type { OutputLine } from '../components/AgentOutputPanel';
 import { NewAgentForm } from '../components/NewAgentForm';
+import { DiffView } from '../components/DiffView';
 import type { AgentStatus } from '../api/types';
 
 interface AgentStatusEvent {
@@ -16,10 +17,15 @@ interface AgentStatusEvent {
   ts: string;
 }
 
+type Tab = 'output' | 'diff';
+
 export function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { workspaces, repos, loading, refreshWorkspace } = useWorkspaces();
   const [lines, setLines] = useState<OutputLine[]>([]);
+  const [tab, setTab] = useState<Tab>('output');
+  const [changeToken, setChangeToken] = useState(0);
+  const [diffPulse, setDiffPulse] = useState(false);
 
   const ws = workspaces.find((w) => w.id === id) ?? null;
   const repo = ws ? repos.find((r) => r.id === ws.repoId) : null;
@@ -30,18 +36,13 @@ export function WorkspaceDetailPage() {
         const ev = data as OutputLine;
         setLines((prev) => {
           const next = [...prev, ev];
-          // Cap at 5000 lines per workspace to avoid pathological growth
-          // when an agent produces enormous output.
           return next.length > 5000 ? next.slice(-5000) : next;
         });
       } else if (eventName === 'agent-status') {
         const ev = data as AgentStatusEvent;
         if (ws) {
-          // Refetch the workspace so the agent list reflects the new state.
           void refreshWorkspace(ws.id);
         }
-        // Surface terminal events as a synthetic output line so the user sees
-        // something in the panel even if the CLI printed nothing.
         if (ev.status !== 'running' && ev.status !== 'starting') {
           setLines((prev) => [
             ...prev,
@@ -53,19 +54,24 @@ export function WorkspaceDetailPage() {
             },
           ]);
         }
+      } else if (eventName === 'worktree-changed') {
+        setChangeToken((t) => t + 1);
+        if (tab !== 'diff') {
+          setDiffPulse(true);
+          setTimeout(() => setDiffPulse(false), 1200);
+        }
       }
     },
-    [ws, refreshWorkspace],
+    [ws, refreshWorkspace, tab],
   );
 
-  // Subscribe whenever we have a valid workspace id.
   const { connected } = useSse(ws ? `/api/events/workspace/${ws.id}` : null, {
     onEvent,
   });
 
-  // When navigating between workspaces, drop any cached output from the prior one.
   useEffect(() => {
     setLines([]);
+    setChangeToken(0);
   }, [id]);
 
   if (loading) {
@@ -118,17 +124,54 @@ export function WorkspaceDetailPage() {
 
       <NewAgentForm workspaceId={ws.id} onStarted={() => void refreshWorkspace(ws.id)} />
 
-      <div className="flex-1 min-h-0 space-y-3">
-        {sortedAgents.length === 0 ? (
-          <div className="rounded-md border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm text-slate-500">
-            No agents yet. Start one above.
+      <div className="flex items-center gap-1 border-b border-slate-800">
+        <button
+          type="button"
+          onClick={() => setTab('output')}
+          className={`relative px-3 py-1.5 text-sm ${
+            tab === 'output'
+              ? 'border-b-2 border-emerald-500 text-slate-100'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Output
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setTab('diff');
+            setDiffPulse(false);
+          }}
+          className={`relative px-3 py-1.5 text-sm ${
+            tab === 'diff'
+              ? 'border-b-2 border-emerald-500 text-slate-100'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Diff
+          {diffPulse ? (
+            <span className="absolute -right-1 top-1.5 h-2 w-2 animate-ping rounded-full bg-emerald-400" />
+          ) : null}
+        </button>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-auto">
+        {tab === 'output' ? (
+          <div className="space-y-3">
+            {sortedAgents.length === 0 ? (
+              <div className="rounded-md border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm text-slate-500">
+                No agents yet. Start one above.
+              </div>
+            ) : (
+              sortedAgents.map((agent) => (
+                <div key={agent.id} className="h-72">
+                  <AgentOutputPanel workspaceId={ws.id} agent={agent} lines={lines} />
+                </div>
+              ))
+            )}
           </div>
         ) : (
-          sortedAgents.map((agent) => (
-            <div key={agent.id} className="h-72">
-              <AgentOutputPanel workspaceId={ws.id} agent={agent} lines={lines} />
-            </div>
-          ))
+          <DiffView workspaceId={ws.id} changeToken={changeToken} />
         )}
       </div>
     </div>
