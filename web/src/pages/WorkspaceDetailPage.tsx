@@ -8,7 +8,9 @@ import { AgentOutputPanel } from '../components/AgentOutputPanel';
 import type { OutputLine } from '../components/AgentOutputPanel';
 import { NewAgentForm } from '../components/NewAgentForm';
 import { DiffView } from '../components/DiffView';
-import type { AgentStatus } from '../api/types';
+import { MergeButton } from '../components/MergeButton';
+import { api } from '../api/client';
+import type { AgentStatus, DiffResult } from '../api/types';
 
 interface AgentStatusEvent {
   agentId: string;
@@ -21,14 +23,30 @@ type Tab = 'output' | 'diff';
 
 export function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { workspaces, repos, loading, refreshWorkspace } = useWorkspaces();
+  const { workspaces, repos, loading, refreshWorkspace, refresh } = useWorkspaces();
   const [lines, setLines] = useState<OutputLine[]>([]);
   const [tab, setTab] = useState<Tab>('output');
-  const [changeToken, setChangeToken] = useState(0);
   const [diffPulse, setDiffPulse] = useState(false);
+  const [diff, setDiff] = useState<DiffResult | null>(null);
+  const [diffLoading, setDiffLoading] = useState<boolean>(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
 
   const ws = workspaces.find((w) => w.id === id) ?? null;
   const repo = ws ? repos.find((r) => r.id === ws.repoId) : null;
+
+  const loadDiff = useCallback(async () => {
+    if (!ws) return;
+    setDiffLoading(true);
+    try {
+      setDiffError(null);
+      const r = await api.getDiff(ws.id);
+      setDiff(r);
+    } catch (e) {
+      setDiffError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDiffLoading(false);
+    }
+  }, [ws]);
 
   const onEvent = useCallback(
     (eventName: string, data: unknown) => {
@@ -55,24 +73,33 @@ export function WorkspaceDetailPage() {
           ]);
         }
       } else if (eventName === 'worktree-changed') {
-        setChangeToken((t) => t + 1);
+        void loadDiff();
         if (tab !== 'diff') {
           setDiffPulse(true);
           setTimeout(() => setDiffPulse(false), 1200);
+        } else {
+          setDiffPulse(true);
+          setTimeout(() => setDiffPulse(false), 800);
         }
       }
     },
-    [ws, refreshWorkspace, tab],
+    [ws, refreshWorkspace, tab, loadDiff],
   );
 
   const { connected } = useSse(ws ? `/api/events/workspace/${ws.id}` : null, {
     onEvent,
   });
 
+  // Reset transient state when workspace id changes.
   useEffect(() => {
     setLines([]);
-    setChangeToken(0);
+    setDiff(null);
   }, [id]);
+
+  // Load diff once we have a workspace and on subsequent id changes.
+  useEffect(() => {
+    if (ws) void loadDiff();
+  }, [ws, loadDiff]);
 
   if (loading) {
     return <div className="p-6 text-sm text-slate-500">Loading…</div>;
@@ -120,6 +147,13 @@ export function WorkspaceDetailPage() {
           </div>
           <div className="mt-1 truncate font-mono text-[11px] text-slate-600">{ws.worktreePath}</div>
         </div>
+        <MergeButton
+          workspace={ws}
+          diff={diff}
+          onMerged={() => {
+            void refresh();
+          }}
+        />
       </div>
 
       <NewAgentForm workspaceId={ws.id} onStarted={() => void refreshWorkspace(ws.id)} />
@@ -149,7 +183,7 @@ export function WorkspaceDetailPage() {
           }`}
         >
           Diff
-          {diffPulse ? (
+          {diffPulse && tab !== 'diff' ? (
             <span className="absolute -right-1 top-1.5 h-2 w-2 animate-ping rounded-full bg-emerald-400" />
           ) : null}
         </button>
@@ -171,7 +205,13 @@ export function WorkspaceDetailPage() {
             )}
           </div>
         ) : (
-          <DiffView workspaceId={ws.id} changeToken={changeToken} />
+          <DiffView
+            diff={diff}
+            loading={diffLoading}
+            error={diffError}
+            pulse={diffPulse}
+            onRefresh={() => void loadDiff()}
+          />
         )}
       </div>
     </div>

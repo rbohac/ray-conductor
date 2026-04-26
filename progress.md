@@ -110,3 +110,25 @@ event arrives while the user is on the Output tab.
 inside a watched worktree produce `worktree-changed` SSE events within
 ~500 ms; the diff endpoint correctly classifies added/modified/deleted
 files; changes inside `.git/` are filtered.
+
+## Phase 5 — Merge / land (DONE)
+
+`POST /api/workspaces/{id}/merge` runs `git checkout {baseBranch}` then
+`git merge --no-ff {branchName}` in the source repo. On success the
+workspace flips to `Completed`. On a non-zero merge it queries
+`git diff --name-only --diff-filter=U` for the conflicting files,
+runs `git merge --abort` so the source repo stays clean, and returns
+HTTP 409 with `{ error, conflicts: [paths] }`. Re-merging a completed
+workspace returns 409. Frontend gained a `MergeButton` component that
+opens a confirmation modal showing the diff summary (per-file status
+with `[A]/[M]/[D]/[R]` badges, totals) and the exact git commands
+about to run; on success it toasts and refreshes; on conflict it
+toasts the file list. The button is disabled (and labelled "Merged")
+once `workspace.status === 'completed'`. Diff state was lifted into
+`WorkspaceDetailPage` so both the `DiffView` and the merge confirmation
+share the same fetched data and the same `worktree-changed` invalidation.
+Verified: clean merge folds the workspace branch into the source repo's
+base branch (verified via `git log --oneline main`); subsequent merge
+returns 409; conflicting changes on both sides produce a 409 with the
+conflicting filenames listed and the source repo cleanly back on the
+base branch (`git status` clean).

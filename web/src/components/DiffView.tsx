@@ -1,19 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, ChevronRight, FileDiff, FilePlus, FileMinus, FilePen, RefreshCcw } from 'lucide-react';
 import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
-import { api } from '../api/client';
 import type { DiffFile, DiffResult } from '../api/types';
 
 interface DiffViewProps {
-  workspaceId: string;
-  /** A monotonic counter the parent bumps on `worktree-changed` SSE events. */
-  changeToken: number;
+  diff: DiffResult | null;
+  loading: boolean;
+  error: string | null;
+  pulse: boolean;
+  onRefresh: () => void;
 }
 
 function reconstruct(file: DiffFile): { before: string; after: string } {
-  // react-diff-viewer-continued is a side-by-side renderer; reconstruct the
-  // pre/post text for the file by walking the hunk bodies. Surrounding
-  // context is included verbatim, the `+`/`-` prefix decides the side.
   const before: string[] = [];
   const after: string[] = [];
   for (const hunk of file.hunks) {
@@ -88,57 +86,29 @@ function FileBlock({ file }: { file: DiffFile }) {
   );
 }
 
-export function DiffView({ workspaceId, changeToken }: DiffViewProps) {
-  const [data, setData] = useState<DiffResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pulse, setPulse] = useState(false);
-
-  async function load() {
-    try {
-      setError(null);
-      const r = await api.getDiff(workspaceId);
-      setData(r);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  // Initial fetch and refetch on workspace change.
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]);
-
-  // Refetch when the watcher reports a worktree change.
-  useEffect(() => {
-    if (changeToken === 0) return;
-    setPulse(true);
-    const t = setTimeout(() => setPulse(false), 800);
-    void load();
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeToken]);
-
-  const totalAdditions = data?.files.reduce((s, f) => s + f.additions, 0) ?? 0;
-  const totalDeletions = data?.files.reduce((s, f) => s + f.deletions, 0) ?? 0;
+export function DiffView({ diff, loading, error, pulse, onRefresh }: DiffViewProps) {
+  const totalAdditions = diff?.files.reduce((s, f) => s + f.additions, 0) ?? 0;
+  const totalDeletions = diff?.files.reduce((s, f) => s + f.deletions, 0) ?? 0;
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 text-sm">
         <div className="text-slate-400">
-          {data ? (
+          {diff ? (
             <>
-              <span className="font-mono">{data.headBranch}</span>{' '}
+              <span className="font-mono">{diff.headBranch}</span>{' '}
               <span className="text-slate-600">vs.</span>{' '}
-              <span className="font-mono">{data.baseBranch}</span>
+              <span className="font-mono">{diff.baseBranch}</span>
               <span className="ml-3 text-emerald-400">+{totalAdditions}</span>{' '}
               <span className="text-red-400">-{totalDeletions}</span>{' '}
               <span className="text-slate-500">
-                in {data.files.length} file{data.files.length === 1 ? '' : 's'}
+                in {diff.files.length} file{diff.files.length === 1 ? '' : 's'}
               </span>
             </>
-          ) : (
+          ) : loading ? (
             'Loading diff…'
+          ) : (
+            ''
           )}
         </div>
         {pulse ? (
@@ -148,7 +118,7 @@ export function DiffView({ workspaceId, changeToken }: DiffViewProps) {
         ) : null}
         <button
           type="button"
-          onClick={() => void load()}
+          onClick={onRefresh}
           className="ml-auto flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
         >
           <RefreshCcw className="h-3.5 w-3.5" /> refresh
@@ -159,14 +129,14 @@ export function DiffView({ workspaceId, changeToken }: DiffViewProps) {
         <div className="rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">{error}</div>
       ) : null}
 
-      {data && data.files.length === 0 ? (
+      {diff && diff.files.length === 0 ? (
         <div className="rounded-md border border-dashed border-slate-700 bg-slate-900/40 p-6 text-center text-sm text-slate-500">
-          No changes between <span className="font-mono">{data.headBranch}</span> and{' '}
-          <span className="font-mono">{data.baseBranch}</span>.
+          No changes between <span className="font-mono">{diff.headBranch}</span> and{' '}
+          <span className="font-mono">{diff.baseBranch}</span>.
         </div>
       ) : null}
 
-      {data?.files.map((f) => <FileBlock key={f.path} file={f} />)}
+      {diff?.files.map((f) => <FileBlock key={f.path} file={f} />)}
     </div>
   );
 }

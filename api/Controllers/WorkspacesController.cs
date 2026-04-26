@@ -12,6 +12,7 @@ public sealed class WorkspacesController(
     WorktreeService worktrees,
     AgentProcessService agents,
     DiffService diffs,
+    GitService git,
     ILogger<WorkspacesController> logger) : ControllerBase
 {
     [HttpGet]
@@ -34,6 +35,57 @@ public sealed class WorkspacesController(
         if (repo is null) return NotFound(new { error = "Workspace repo missing." });
         var result = await diffs.GetAsync(repo.Path, ws.BaseBranch, ws.BranchName, ct);
         return Ok(result);
+    }
+
+    [HttpPost("{id}/merge")]
+    public async Task<ActionResult> Merge(string id, CancellationToken ct)
+    {
+        var ws = store.GetWorkspace(id);
+        if (ws is null) return NotFound();
+        var repo = store.GetRepo(ws.RepoId);
+        if (repo is null) return NotFound(new { error = "Workspace repo missing." });
+        if (ws.Status == Maestro.Api.Models.Domain.WorkspaceStatus.Completed)
+        {
+            return Conflict(new { error = "Workspace already merged." });
+        }
+
+        // Checkout the base in the source repo's main checkout. Fails if the
+        // user has uncommitted changes there or if some other worktree owns
+        // the base branch — surface git's stderr so the user can act on it.
+        var checkout = await git.CheckoutAsync(repo.Path, ws.BaseBranch, ct);
+        if (!checkout.Success)
+        {
+            return BadRequest(new
+            {
+                error = $"Could not checkout {ws.BaseBranch}: {checkout.StdErr.Trim()}",
+            });
+        }
+
+        var merge = await git.MergeNoFfAsync(repo.Path, ws.BranchName, ct);
+        if (!merge.Success)
+        {
+            var conflictResult = await git.RunAsync(
+                repo.Path,
+                ["diff", "--name-only", "--diff-filter=U"],
+                ct);
+            var conflicts = conflictResult.StdOut
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Trim())
+                .Where(l => l.Length > 0)
+                .ToArray();
+            await git.RunAsync(repo.Path, ["merge", "--abort"], ct);
+            logger.LogWarning("Merge {Branch} into {Base} had conflicts: {Files}",
+                ws.BranchName, ws.BaseBranch, string.Join(',', conflicts));
+            return Conflict(new
+            {
+                error = $"Merge had conflicts in {conflicts.Length} file(s). Aborted.",
+                conflicts,
+            });
+        }
+
+        store.MutateWorkspace(id, w => w.Status = Maestro.Api.Models.Domain.WorkspaceStatus.Completed);
+        logger.LogInformation("Merged workspace {Id}: {Branch} -> {Base}", id, ws.BranchName, ws.BaseBranch);
+        return Ok(new { ok = true });
     }
 
     [HttpPost]
