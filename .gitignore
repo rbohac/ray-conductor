@@ -1,0 +1,28 @@
+# --- .NET ---
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+*.pdb
+
+# Published artifacts and the API's compiled SPA bundle
+api/wwwroot/assets/
+api/wwwroot/index.html
+
+# --- Node / Vite ---
+web/node_modules/
+web/dist/
+web/.vite/
+
+# --- Editors ---
+.vscode/
+.idea/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Maestro runtime ---
+.maestro-worktrees/

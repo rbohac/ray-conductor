@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Maestro</AssemblyName>
+    <RootNamespace>Maestro.Api</RootNamespace>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+  </ItemGroup>
+
+  <!--
+    Builds the Vite frontend before publish (always) and before debug build only
+    when wwwroot is empty, so a fresh clone of the repo can run with just
+    `dotnet run` without having to know to run `npm run build` first.
+  -->
+  <Target Name="BuildWebFrontendOnPublish" BeforeTargets="Publish">
+    <Message Importance="high" Text="Building Vite frontend (publish)..." />
+    <Exec Command="npm install" WorkingDirectory="$(MSBuildThisFileDirectory)../web" />
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildThisFileDirectory)../web" />
+  </Target>
+
+  <Target Name="BuildWebFrontendIfMissing" BeforeTargets="Build" Condition="!Exists('$(MSBuildThisFileDirectory)wwwroot/index.html')">
+    <Message Importance="high" Text="wwwroot is empty; building Vite frontend once..." />
+    <Exec Command="npm install" WorkingDirectory="$(MSBuildThisFileDirectory)../web" />
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildThisFileDirectory)../web" />
+  </Target>
+
+</Project>
